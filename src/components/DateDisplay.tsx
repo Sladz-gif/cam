@@ -1119,7 +1119,7 @@ export default function DateDisplay(props: DateDisplayProps) {
                         <button
                           type="button"
                           onClick={onViewerBack}
-                          aria-label={viewerFeedIdx !== null ? "Back to station feeds" : "Back to station list"}
+                          aria-label={viewerFeedIdx !== null && viewerFeedIdx !== -1 ? "Back to station feeds" : "Back to station list"}
                           className="
                             inline-flex
                             items-center
@@ -1230,7 +1230,7 @@ export default function DateDisplay(props: DateDisplayProps) {
                       <div className="w-full h-px bg-gradient-to-r from-[#0b3d91]/40 via-[#0b3d91]/10 to-transparent shrink-0" />
 
                       <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-                        {viewerFeedIdx !== null ? (
+                        {viewerFeedIdx !== null && viewerFeedIdx !== -1 ? (
                           <div className="w-full h-full flex flex-col gap-3">
                             <div
                               className="

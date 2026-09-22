@@ -80,19 +80,26 @@ export default function RetroDisplayApp() {
     });
   }, [selectedLocationIdx, pickedDateIso]);
 
+  const handleViewerSelectLocation = useCallback((idx: number) => {
+    setViewerLocationIdx(idx);
+    setViewerFeedIdx(-1);
+    void logActivity({
+      event_type: 'viewer_open',
+      location_idx: idx,
+      camera_idx: null,
+    });
+  }, []);
+
   const handleCloseViewer = useCallback(() => {
     setViewerOpen(false);
     setViewerFeedIdx(null);
     void logActivity({ event_type: 'viewer_close' });
   }, []);
 
-  const handleViewerSelectLocation = useCallback((idx: number) => {
-    setViewerLocationIdx(idx);
-    setViewerFeedIdx(null);
-  }, []);
-
   const handleViewerBack = useCallback(() => {
-    if (viewerFeedIdx !== null) {
+    if (viewerFeedIdx !== null && viewerFeedIdx !== -1) {
+      setViewerFeedIdx(-1);
+    } else if (viewerFeedIdx === -1) {
       setViewerFeedIdx(null);
     } else {
       handleCloseViewer();
