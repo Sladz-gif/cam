@@ -20,7 +20,7 @@ export interface ActivityLogRow {
   ip_address: string | null;
   user_agent: string | null;
   path: string | null;
-  detail: Record<string, unknown> | null;
+  detail: Record<string, unknown>;
 }
 
 export interface DailyVisitorRow {

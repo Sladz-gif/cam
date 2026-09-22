@@ -75,56 +75,6 @@ const EVENT_PILL: Record<LogEventType, string> = {
   viewer_close: 'bg-rose-50 text-rose-800 border-rose-200',
 };
 
-function buildMockRows(): ActivityLogRow[] {
-  const rows: ActivityLogRow[] = [];
-  const events: LogEventType[] = [
-    'visit',
-    'location_change',
-    'camera_change',
-    'date_pick',
-    'play_confirm',
-    'viewer_open',
-    'viewer_close',
-  ];
-  const now = Date.now();
-  for (let i = 0; i < 60; i++) {
-    const event = events[Math.floor(Math.random() * events.length)];
-    const location = Math.floor(Math.random() * LOCATIONS.length);
-    const camera = Math.random() > 0.5 ? Math.floor(Math.random() * 6) : null;
-    const ts = new Date(now - i * (2 * 60 * 1000) - Math.floor(Math.random() * 25_000));
-    rows.push({
-      id: `mock_${i}_${ts.getTime().toString(36)}`,
-      created_at: ts.toISOString(),
-      event_type: event,
-      location_idx: ['visit', 'viewer_close'].includes(event) ? null : location,
-      camera_idx: camera,
-      picked_date_iso: event === 'date_pick' || event === 'play_confirm' ? todayIso(new Date(now - i * 86_400_000)) : null,
-      visitor_session_id: `s_${(i % 7).toString(16)}`,
-      ip_address: null,
-      user_agent: null,
-      path: i % 3 === 0 ? '/logs' : '/',
-      detail: {},
-    });
-  }
-  return rows;
-}
-
-function buildMockDaily(daysBack = 14): DailyVisitorRow[] {
-  const rows: DailyVisitorRow[] = [];
-  const today = new Date();
-  for (let i = daysBack - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const iso = todayIso(d);
-    rows.push({
-      visitor_date: iso,
-      count: Math.max(1, 12 + Math.floor(Math.sin(i) * 6) + Math.floor(Math.random() * 40)),
-      updated_at: new Date(d.getTime() + 23 * 3600 * 1000).toISOString(),
-    });
-  }
-  return rows;
-}
-
 function SummCard({
   label,
   value,
@@ -149,13 +99,9 @@ function SummCard({
 export default function LogsPage() {
   const configured = useMemo(() => isSupabaseConfigured(), []);
   const [nowMs] = useState<number>(() => Date.now());
-  const [rows, setRows] = useState<ActivityLogRow[]>(() =>
-    configured ? [] : buildMockRows(),
-  );
-  const [daily, setDaily] = useState<DailyVisitorRow[]>(() =>
-    configured ? [] : buildMockDaily(14),
-  );
-  const [loading, setLoading] = useState<boolean>(false);
+  const [rows, setRows] = useState<ActivityLogRow[]>([]);
+  const [daily, setDaily] = useState<DailyVisitorRow[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [eventFilter, setEventFilter] = useState<'all' | LogEventType>('all');
 
@@ -167,8 +113,8 @@ export default function LogsPage() {
   const refresh = useCallback(async () => {
     const sb = getSupabase();
     if (!sb) {
-      setRows(buildMockRows());
-      setDaily(buildMockDaily(14));
+      setRows([]);
+      setDaily([]);
       return;
     }
     setLoading(true);
@@ -198,7 +144,6 @@ export default function LogsPage() {
   }, []);
 
   useEffect(() => {
-    if (!configured) return;
     let cancelled = false;
     const id = window.setTimeout(async () => {
       if (cancelled) return;
@@ -208,7 +153,7 @@ export default function LogsPage() {
       cancelled = true;
       window.clearTimeout(id);
     };
-  }, [configured, refresh]);
+  }, [refresh]);
 
   const summary = useMemo(() => {
     const base = new Date(nowMs);
@@ -306,18 +251,18 @@ export default function LogsPage() {
                 ${
                   configured
                     ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                    : 'border-amber-300 bg-amber-50 text-amber-800'
+                    : 'border-rose-300 bg-rose-50 text-rose-800'
                 }
               `}
             >
-              {configured ? '● Connected' : '● Demo data'}
+              {configured ? '● Live · Supabase' : '● Disconnected'}
             </div>
           </div>
 
           <button
             type="button"
             onClick={() => void refresh()}
-            disabled={loading}
+            disabled={loading || !configured}
             className="
               inline-flex
               items-center
@@ -338,6 +283,7 @@ export default function LogsPage() {
               hover:bg-[#0a357d]
               active:translate-y-[1px]
               disabled:opacity-60
+              disabled:cursor-not-allowed
               focus-visible:outline-none
               focus-visible:ring-2
               focus-visible:ring-[#0b3d91]
@@ -364,6 +310,21 @@ export default function LogsPage() {
           </button>
         </div>
 
+        {!configured ? (
+          <div className="mb-3 sm:mb-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 p-4 sm:p-5">
+            <p className="font-bold text-[13px] sm:text-[14px] mb-1.5">
+              Supabase is not connected.
+            </p>
+            <p className="text-[11px] sm:text-[12px] font-mono leading-relaxed">
+              Set <code className="bg-rose-100 px-1.5 py-0.5 rounded">NEXT_PUBLIC_SUPABASE_URL</code>
+              {' '}and <code className="bg-rose-100 px-1.5 py-0.5 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{' '}
+              in environment variables and ensure the schema from{' '}
+              <code className="bg-rose-100 px-1.5 py-0.5 rounded">supabase/migrations/0001_schema.sql</code>
+              {' '}has been applied to your project.
+            </p>
+          </div>
+        ) : null}
+
         {error ? (
           <div className="mb-3 sm:mb-4 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-[11px] sm:text-[12px] px-3 py-2 font-mono">
             {error}
@@ -389,8 +350,6 @@ export default function LogsPage() {
           <div
             className="
               grid
-              grid-cols-7
-              sm:grid-cols-14
               gap-1.5
               items-end
               h-[120px]
@@ -423,7 +382,9 @@ export default function LogsPage() {
             })}
             {daily.length === 0 ? (
               <div className="col-span-full flex items-center justify-center h-full text-[11px] text-[#64748b] font-mono">
-                No visitor data yet.
+                {configured
+                  ? 'No visitor data yet — data will appear after the first visit is logged.'
+                  : 'No connection to Supabase.'}
               </div>
             ) : null}
           </div>
@@ -485,7 +446,17 @@ export default function LogsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading && rows.length === 0 ? (
+                {!configured ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-3 sm:px-4 py-10 text-center text-[#64748b] font-mono"
+                    >
+                      Connect Supabase environment variables to load live activity.
+                    </td>
+                  </tr>
+                ) : null}
+                {configured && loading && rows.length === 0 ? (
                   <tr>
                     <td
                       colSpan={6}
@@ -495,13 +466,13 @@ export default function LogsPage() {
                     </td>
                   </tr>
                 ) : null}
-                {!loading && filtered.length === 0 ? (
+                {configured && !loading && filtered.length === 0 ? (
                   <tr>
                     <td
                       colSpan={6}
                       className="px-3 sm:px-4 py-10 text-center text-[#64748b] font-mono"
                     >
-                      No events matching this filter.
+                      No events yet. Interact with the console to generate activity.
                     </td>
                   </tr>
                 ) : null}
@@ -563,8 +534,8 @@ export default function LogsPage() {
 
         <div className="mt-3 sm:mt-4 text-[10px] sm:text-[11px] text-[#64748b] font-mono">
           {configured
-            ? 'Schema: supabase/migrations/0001_schema.sql · daily_visitors auto-increment via PG trigger on visit events.'
-            : 'Set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY to wire to Supabase.'}
+            ? 'Source: supabase activity_logs + daily_visitors · daily_visitors auto-increment via PG trigger on every visit insert.'
+            : 'Set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY env vars to connect live data.'}
         </div>
       </div>
     </div>
