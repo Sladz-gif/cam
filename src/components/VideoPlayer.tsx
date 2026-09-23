@@ -1,8 +1,38 @@
 'use client';
 
 import type { LocationType } from './DisplayArea';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export default function VideoPlayer({ location }: { location: LocationType }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      void v.play();
+    } else {
+      v.pause();
+    }
+  }, []);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => setIsPlaying(false);
+    v.addEventListener('play', onPlay);
+    v.addEventListener('pause', onPause);
+    v.addEventListener('ended', onEnded);
+    return () => {
+      v.removeEventListener('play', onPlay);
+      v.removeEventListener('pause', onPause);
+      v.removeEventListener('ended', onEnded);
+    };
+  }, []);
+
   return (
     <div
       className="
@@ -90,9 +120,9 @@ export default function VideoPlayer({ location }: { location: LocationType }) {
           >
             <span
               aria-hidden="true"
-              className="inline-block w-1.5 h-1.5 rounded-full bg-white/90 animate-pulse"
+              className={`inline-block w-1.5 h-1.5 rounded-full ${isPlaying ? 'bg-white/90 animate-pulse' : 'bg-amber-300'}`}
             />
-            ON AIR
+            {isPlaying ? 'ON AIR' : 'PAUSED'}
           </div>
         </div>
 
@@ -107,11 +137,14 @@ export default function VideoPlayer({ location }: { location: LocationType }) {
             bg-black
             overflow-hidden
             shadow-[0_10px_30px_-12px_rgba(15,23,42,0.4)]
+            relative
+            group/video
           "
         >
           <div className="relative w-full h-full flex items-center justify-center">
             <video
-              controls
+              ref={videoRef}
+              controls={false}
               autoPlay
               muted
               playsInline
@@ -126,17 +159,80 @@ export default function VideoPlayer({ location }: { location: LocationType }) {
                 bg-black
               "
             >
-              {/*
-                To use a real video:
-                  1. Drop your file at public/videos/sample.mp4 in this project, OR
-                  2. Replace the src below with an absolute/remote URL.
-                The <source> below points at /videos/sample.mp4 by default; Next.js
-                will serve it from the public folder. If missing, browsers will
-                simply show the native controls with no stream — no runtime error.
-              */}
               <source src="/videos/sample.mp4" type="video/mp4" />
               Your browser does not support embedded HTML5 video.
             </video>
+            <button
+              type="button"
+              onClick={togglePlay}
+              aria-label={isPlaying ? 'Pause video' : 'Play video'}
+              aria-pressed={!isPlaying}
+              className="
+                absolute
+                top-3
+                right-3
+                sm:top-3.5
+                sm:right-3.5
+                inline-flex
+                items-center
+                justify-center
+                w-10
+                h-10
+                rounded-full
+                bg-white/95
+                text-[#0b3d91]
+                border
+                border-white/60
+                shadow-[0_4px_14px_-4px_rgba(15,23,42,0.5)]
+                backdrop-blur-[2px]
+                hover:bg-white
+                hover:scale-105
+                active:translate-y-[1px]
+                transition-all
+                duration-[120ms]
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-white
+                focus-visible:ring-offset-2
+                focus-visible:ring-offset-black
+                z-10
+              "
+            >
+              {isPlaying ? (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="w-[18px] h-[18px]"
+                  aria-hidden="true"
+                >
+                  <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
+                </svg>
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="w-[18px] h-[18px] translate-x-[1px]"
+                  aria-hidden="true"
+                >
+                  <path d="M8 5.14v13.72c0 .79.87 1.27 1.54.84l10.77-6.86a1 1 0 0 0 0-1.68L9.54 4.3C8.87 3.87 8 4.35 8 5.14Z" />
+                </svg>
+              )}
+            </button>
+            <div
+              className="
+                absolute
+                bottom-0
+                inset-x-0
+                p-3
+                sm:p-4
+                pointer-events-none
+                bg-gradient-to-t
+                from-black/60
+                via-black/10
+                to-transparent
+              "
+              aria-hidden="true"
+            />
           </div>
         </div>
 
@@ -154,7 +250,7 @@ export default function VideoPlayer({ location }: { location: LocationType }) {
             font-mono
           "
         >
-          <p className="truncate">Controls · Native HTML5 · Transport + Volume CC</p>
+          <p className="truncate">Controls · Play/Pause on-display · Native Transport + Volume CC</p>
         </div>
       </div>
     </div>

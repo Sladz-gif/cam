@@ -335,10 +335,17 @@ export default function LocationFeed({
 
   const [frameIdx, setFrameIdx] = useState(0);
   const runningRef = useRef<number | null>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
 
   useEffect(() => {
-    setFrameIdx(0);
-    if (frames.length <= 1) return;
+    if (frames.length <= 1 || !isPlaying) {
+      if (runningRef.current !== null) {
+        window.clearInterval(runningRef.current);
+        runningRef.current = null;
+      }
+      return;
+    }
+    if (runningRef.current !== null) return;
     runningRef.current = window.setInterval(() => {
       setFrameIdx((i) => (i + 1) % frames.length);
     }, CAROUSEL_INTERVAL_MS);
@@ -348,7 +355,9 @@ export default function LocationFeed({
         runningRef.current = null;
       }
     };
-  }, [frames]);
+  }, [frames, isPlaying]);
+
+  const togglePlay = () => setIsPlaying((p) => !p);
 
   const sortedDates = useMemo(
     () => [...archiveDateIsos].sort(),
@@ -479,7 +488,8 @@ export default function LocationFeed({
                   flex-1
                   min-h-[280px]
                   sm:min-h-[360px]
-                  aspect-[16/10]
+                  aspect-square
+                  sm:aspect-[16/10]
                   overflow-hidden
                   rounded-xl
                   border
@@ -563,26 +573,99 @@ export default function LocationFeed({
                     </>
                   )}
                 </div>
-                {isArchive && frames.length > 1 ? (
-                  <div
-                    className="
-                      absolute
-                      top-2.5
-                      sm:top-3
-                      right-2.5
-                      sm:right-3
-                      px-2
-                      py-1
-                      rounded
-                      bg-[#0b3d91]/90
-                      text-white
-                      text-[11px]
-                      font-mono
-                      font-semibold
-                      backdrop-blur-[2px]
-                    "
-                  >
-                    {frameIdx + 1}/{frames.length}
+                {(isArchive && frames.length > 1) || !isArchive ? (
+                  <div className="absolute top-2.5 sm:top-3 right-2.5 sm:right-3 flex items-center gap-1.5">
+                    {isArchive && !isPlaying ? (
+                      <div
+                        className="
+                          px-2
+                          py-1
+                          rounded
+                          bg-amber-500/95
+                          text-white
+                          text-[11px]
+                          font-mono
+                          font-bold
+                          backdrop-blur-[2px]
+                          flex
+                          items-center
+                          gap-1
+                        "
+                      >
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3" aria-hidden="true">
+                          <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+                        </svg>
+                        PAUSED
+                      </div>
+                    ) : null}
+                    {isArchive && frames.length > 1 ? (
+                      <div
+                        className="
+                          px-2
+                          py-1
+                          rounded
+                          bg-[#0b3d91]/90
+                          text-white
+                          text-[11px]
+                          font-mono
+                          font-semibold
+                          backdrop-blur-[2px]
+                        "
+                      >
+                        {frameIdx + 1}/{frames.length}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={togglePlay}
+                      aria-label={isPlaying ? 'Pause playback' : 'Play'}
+                      aria-pressed={!isPlaying}
+                      className="
+                        group/play
+                        inline-flex
+                        items-center
+                        justify-center
+                        w-9
+                        h-9
+                        rounded-full
+                        bg-white/95
+                        text-[#0b3d91]
+                        border
+                        border-white/60
+                        shadow-[0_4px_14px_-4px_rgba(15,23,42,0.5)]
+                        backdrop-blur-[2px]
+                        hover:bg-white
+                        hover:scale-105
+                        active:translate-y-[1px]
+                        transition-all
+                        duration-[120ms]
+                        focus-visible:outline-none
+                        focus-visible:ring-2
+                        focus-visible:ring-white
+                        focus-visible:ring-offset-2
+                        focus-visible:ring-offset-[#0f172a]
+                      "
+                    >
+                      {isPlaying ? (
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="w-[18px] h-[18px]"
+                          aria-hidden="true"
+                        >
+                          <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
+                        </svg>
+                      ) : (
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="w-[18px] h-[18px] translate-x-[1px]"
+                          aria-hidden="true"
+                        >
+                          <path d="M8 5.14v13.72c0 .79.87 1.27 1.54.84l10.77-6.86a1 1 0 0 0 0-1.68L9.54 4.3C8.87 3.87 8 4.35 8 5.14Z" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 ) : null}
                 <div

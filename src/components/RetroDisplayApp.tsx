@@ -44,6 +44,32 @@ export default function RetroDisplayApp() {
   const [selectedCameraIdx, setSelectedCameraIdx] = useState(0);
   const [pickedDateIsos, setPickedDateIsos] = useState<string[]>([]);
   const [feedSelectionVersion, setFeedSelectionVersion] = useState(0);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
+  const toggleSidebar = useCallback(() => setIsSidebarOpen((v) => !v), []);
+
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const htmlEl = document.documentElement;
+    const bodyEl = document.body;
+    const prevOverflow = bodyEl.style.overflow;
+    htmlEl.style.overflow = 'hidden';
+    bodyEl.style.overflow = 'hidden';
+    return () => {
+      htmlEl.style.overflow = '';
+      bodyEl.style.overflow = prevOverflow;
+    };
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isSidebarOpen]);
 
   useEffect(() => {
     if (!shouldLogVisit()) return;
@@ -61,6 +87,7 @@ export default function RetroDisplayApp() {
       setFeedSelectionVersion((v) => v + 1);
     }
     setActiveView(view);
+    setIsSidebarOpen(false);
   }, []);
 
   const handleLocationChange = useCallback((idx: number) => {
@@ -68,6 +95,7 @@ export default function RetroDisplayApp() {
     setSelectedCameraIdx(0);
     setFeedSelectionVersion((v) => v + 1);
     setActiveView('feed');
+    setIsSidebarOpen(false);
     void logActivity({
       event_type: 'location_change',
       location_idx: idx,
@@ -79,6 +107,7 @@ export default function RetroDisplayApp() {
     setSelectedCameraIdx(idx);
     setFeedSelectionVersion((v) => v + 1);
     setActiveView('feed');
+    setIsSidebarOpen(false);
     void logActivity({
       event_type: 'camera_change',
       location_idx: selectedLocationIdx,
@@ -99,6 +128,15 @@ export default function RetroDisplayApp() {
         detail: { picked_dates: sorted },
       });
     }
+  }, []);
+
+  const handleResetToLive = useCallback(() => {
+    setPickedDateIsos([]);
+    setSelectedLocationIdx((prev) => prev);
+    setSelectedCameraIdx((prev) => prev);
+    setFeedSelectionVersion((v) => v + 1);
+    setActiveView('feed');
+    setIsSidebarOpen(false);
   }, []);
 
   const displayProps = useMemo(
@@ -161,31 +199,43 @@ export default function RetroDisplayApp() {
           gap-0
         "
       >
+        {isSidebarOpen ? (
+          <div
+            aria-hidden="true"
+            onClick={closeSidebar}
+            className="
+              fixed
+              inset-0
+              z-30
+              bg-[#0f172a]/55
+              backdrop-blur-[2px]
+              sm:hidden
+              opacity-100
+              transition-opacity
+              duration-150
+              ease-out
+            "
+          />
+        ) : null}
+
         <aside
           aria-label="Primary navigation"
-          className="
-            relative
-            w-full
-            sm:w-[240px]
-            md:w-[260px]
-            lg:w-[270px]
-            shrink-0
-            flex
-            flex-col
-            gap-0
-            h-full
-            min-h-0
-            border-b
-            sm:border-b-0
-            sm:border-r
-            border-[#cbd2df]
-            bg-gradient-to-b
-            from-[#e9edf4]
-            via-[#e2e7ef]
-            to-[#d9dfeb]
-            shadow-[inset_-1px_0_0_rgba(15,23,42,0.05)]
-            overflow-hidden
-          "
+          aria-modal={isSidebarOpen}
+          role={isSidebarOpen ? 'dialog' : undefined}
+          className={[
+            'z-40 flex flex-col gap-0',
+            'w-[86%] max-w-[320px] sm:w-[240px] md:w-[260px] lg:w-[270px]',
+            'h-full min-h-0 shrink-0',
+            'border-b sm:border-b-0 sm:border-r border-[#cbd2df]',
+            'bg-gradient-to-b from-[#e9edf4] via-[#e2e7ef] to-[#d9dfeb]',
+            'shadow-[0_14px_40px_-10px_rgba(15,23,42,0.35)] sm:shadow-[inset_-1px_0_0_rgba(15,23,42,0.05)]',
+            'overflow-hidden',
+            'fixed sm:static inset-y-0 left-0',
+            'transform transition-transform duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
+            isSidebarOpen
+              ? 'translate-x-0'
+              : '-translate-x-full sm:translate-x-0',
+          ].join(' ')}
         >
           <div
             className="
@@ -249,6 +299,46 @@ export default function RetroDisplayApp() {
                 </p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={closeSidebar}
+              aria-label="Close navigation"
+              className="
+                sm:hidden
+                inline-flex
+                items-center
+                justify-center
+                w-9
+                h-9
+                rounded-md
+                border
+                border-white/20
+                bg-white/10
+                text-white
+                hover:bg-white/20
+                active:translate-y-[1px]
+                transition-all
+                duration-[100ms]
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-white
+                focus-visible:ring-offset-2
+                focus-visible:ring-offset-[#092f70]
+              "
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-[18px] h-[18px]"
+                aria-hidden="true"
+              >
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           <div className="flex-1 min-h-0 px-2 sm:px-2.5 pt-2.5 sm:pt-3 pb-2.5 sm:pb-3 overflow-y-auto">
@@ -284,6 +374,7 @@ export default function RetroDisplayApp() {
               <Link
                 href="/logs"
                 aria-label="Open system logs page"
+                onClick={() => setIsSidebarOpen(false)}
                 className="
                   inline-flex
                   items-center
@@ -357,9 +448,53 @@ export default function RetroDisplayApp() {
               border-[#dbe1ec]
               bg-white/60
               shrink-0
+              gap-2
             "
           >
             <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                aria-label={isSidebarOpen ? 'Close navigation' : 'Open navigation'}
+                aria-expanded={isSidebarOpen}
+                aria-controls="primary-navigation"
+                className="
+                  sm:hidden
+                  inline-flex
+                  items-center
+                  justify-center
+                  w-9
+                  h-9
+                  rounded-md
+                  border
+                  border-[#cbd2df]
+                  bg-white
+                  text-[#0f172a]
+                  hover:bg-[#f8fafc]
+                  active:translate-y-[1px]
+                  transition-all
+                  duration-[100ms]
+                  focus-visible:outline-none
+                  focus-visible:ring-2
+                  focus-visible:ring-[#0b3d91]
+                  focus-visible:ring-offset-1
+                  focus-visible:ring-offset-white
+                  shrink-0
+                "
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-[18px] h-[18px]"
+                  aria-hidden="true"
+                >
+                  <path d="M3 6h18M3 12h18M3 18h18" />
+                </svg>
+              </button>
               <div
                 aria-hidden="true"
                 className="shrink-0 w-[3px] h-5 rounded-full bg-[#0b3d91]"
@@ -371,14 +506,69 @@ export default function RetroDisplayApp() {
                 <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#eef2f7] border border-[#cbd2df] text-[10px] font-mono text-[#475569]">
                   {LOCATIONS[selectedLocationIdx]} · CAM-{String(selectedCameraIdx + 1).padStart(2, '0')}
                 </span>
+                <span className="sm:hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#eef2f7] border border-[#cbd2df] text-[9px] font-mono text-[#475569]">
+                  {LOCATIONS[selectedLocationIdx].slice(0, 3).toUpperCase()}-{String(selectedCameraIdx + 1).padStart(2, '0')}
+                </span>
                 {isArchiveMode ? (
                   <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#0b3d91]/10 border border-[#0b3d91]/30 text-[10px] font-mono text-[#0b3d91] font-semibold">
                     ARCHIVE · {pickedDateIsos.length}d
                   </span>
                 ) : null}
+                {isArchiveMode ? (
+                  <span className="sm:hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#0b3d91]/10 border border-[#0b3d91]/30 text-[9px] font-mono text-[#0b3d91] font-semibold">
+                    ARC·{pickedDateIsos.length}d
+                  </span>
+                ) : null}
               </div>
             </div>
-            <div className="flex items-center gap-2.5 text-[10px] sm:text-[11px] text-[#475569]">
+            <div className="flex items-center gap-2 text-[10px] sm:text-[11px] text-[#475569] shrink-0">
+              {isArchiveMode ? (
+                <button
+                  type="button"
+                  onClick={handleResetToLive}
+                  aria-label="Reset to today's live feed"
+                  className="
+                    inline-flex
+                    items-center
+                    gap-1
+                    px-2
+                    sm:px-2.5
+                    py-1
+                    rounded
+                    border
+                    border-[#0b3d91]/50
+                    bg-[#0b3d91]
+                    text-white
+                    font-semibold
+                    shadow-[0_1px_3px_-1px_rgba(11,61,145,0.45)]
+                    hover:brightness-110
+                    active:translate-y-[1px]
+                    transition-all
+                    duration-[100ms]
+                    focus-visible:outline-none
+                    focus-visible:ring-2
+                    focus-visible:ring-[#0b3d91]
+                    focus-visible:ring-offset-1
+                    focus-visible:ring-offset-white
+                  "
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-3 h-3 sm:w-3.5 sm:h-3.5"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 12a9 9 0 1 1-3-6.7" />
+                    <path d="M21 4v5h-5" />
+                  </svg>
+                  <span className="hidden sm:inline">Reset to Live</span>
+                  <span className="sm:hidden">Reset</span>
+                </button>
+              ) : null}
               <Link
                 href="/logs"
                 aria-label="View system logs"
@@ -444,7 +634,8 @@ export default function RetroDisplayApp() {
                     isArchiveMode ? 'bg-[#0b3d91]' : 'bg-emerald-600 animate-pulse'
                   }`}
                 />
-                {isArchiveMode ? 'Archive' : 'Live'}
+                <span className="hidden sm:inline">{isArchiveMode ? 'Archive' : 'Live'}</span>
+                <span className="sm:hidden">{isArchiveMode ? 'Arc' : 'Live'}</span>
               </div>
             </div>
           </div>
