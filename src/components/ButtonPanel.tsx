@@ -18,8 +18,8 @@ export interface ButtonPanelProps {
   onLocationChange: (idx: number) => void;
   selectedCameraIdx: number;
   onCameraChange: (idx: number) => void;
-  pickedDateIso: string;
-  onPickedDateChange: (iso: string) => void;
+  pickedDateIsos: string[];
+  onPickedDatesChange: (isos: string[]) => void;
 }
 
 const FeedIcon = (
@@ -118,6 +118,11 @@ function pad2(n: number) {
   return String(n).padStart(2, '0');
 }
 
+function ghanaDayKey(iso: string): number {
+  const { year, month, day } = parseIso(iso);
+  return Date.UTC(year, month - 1, day, 12);
+}
+
 export default function ButtonPanel({
   activeView,
   onViewChange,
@@ -126,8 +131,8 @@ export default function ButtonPanel({
   onLocationChange,
   selectedCameraIdx,
   onCameraChange,
-  pickedDateIso,
-  onPickedDateChange,
+  pickedDateIsos,
+  onPickedDatesChange,
 }: ButtonPanelProps) {
   const gap = direction === 'vertical' ? 'gap-1.5' : 'gap-2 sm:gap-3 md:gap-4';
   const flexDir =
@@ -135,18 +140,24 @@ export default function ButtonPanel({
   const role = direction === 'vertical' ? 'navigation' : 'toolbar';
 
   const todayIso = useMemo(() => ghanaTodayIso(), []);
-  const { year: pickedYear, month: pickedMonth, day: pickedDay } = useMemo(
-    () => parseIso(pickedDateIso),
-    [pickedDateIso],
+  const pickedSet = useMemo(
+    () => new Set(pickedDateIsos),
+    [pickedDateIsos],
   );
+
+  const { year: viewYear, month: viewMonth } = useMemo(() => {
+    const sorted = [...pickedDateIsos].sort();
+    const anchor = sorted[sorted.length - 1] ?? todayIso;
+    return parseIso(anchor);
+  }, [pickedDateIsos, todayIso]);
 
   const gridCells = useMemo(() => {
     const firstDow = new Date(
-      Date.UTC(pickedYear, pickedMonth - 1, 1, 12),
+      Date.UTC(viewYear, viewMonth - 1, 1, 12),
     ).getUTCDay();
-    const daysInMonth = ghanaDaysInMonth(pickedYear, pickedMonth);
-    const prevMonth = pickedMonth === 1 ? 12 : pickedMonth - 1;
-    const prevYear = pickedMonth === 1 ? pickedYear - 1 : pickedYear;
+    const daysInMonth = ghanaDaysInMonth(viewYear, viewMonth);
+    const prevMonth = viewMonth === 1 ? 12 : viewMonth - 1;
+    const prevYear = viewMonth === 1 ? viewYear - 1 : viewYear;
     const daysInPrev = ghanaDaysInMonth(prevYear, prevMonth);
     const cells: {
       iso: string;
@@ -158,37 +169,52 @@ export default function ButtonPanel({
     for (let i = firstDow - 1; i >= 0; i--) {
       const d = daysInPrev - i;
       const iso = isoFromGhanaParts(prevYear, prevMonth, d);
-      cells.push({ iso, day: d, inMonth: false, isToday: iso === todayIso, isPicked: iso === pickedDateIso });
+      cells.push({ iso, day: d, inMonth: false, isToday: iso === todayIso, isPicked: pickedSet.has(iso) });
     }
     for (let d = 1; d <= daysInMonth; d++) {
-      const iso = isoFromGhanaParts(pickedYear, pickedMonth, d);
-      cells.push({ iso, day: d, inMonth: true, isToday: iso === todayIso, isPicked: iso === pickedDateIso });
+      const iso = isoFromGhanaParts(viewYear, viewMonth, d);
+      cells.push({ iso, day: d, inMonth: true, isToday: iso === todayIso, isPicked: pickedSet.has(iso) });
     }
     while (cells.length % 7 !== 0 || cells.length < 42) {
-      const nextMonth = pickedMonth === 12 ? 1 : pickedMonth + 1;
-      const nextYear = pickedMonth === 12 ? pickedYear + 1 : pickedYear;
+      const nextMonth = viewMonth === 12 ? 1 : viewMonth + 1;
+      const nextYear = viewMonth === 12 ? viewYear + 1 : viewYear;
       const idx = cells.length - (firstDow + daysInMonth) + 1;
-      const iso = isoFromGhanaParts(nextYear, nextMonth, idx);
-      cells.push({ iso, day: idx, inMonth: false, isToday: iso === todayIso, isPicked: iso === pickedDateIso });
+      const iso = isoFromGhanaParts(nextMonth, nextYear, idx);
+      cells.push({ iso, day: idx, inMonth: false, isToday: iso === todayIso, isPicked: pickedSet.has(iso) });
       if (cells.length >= 42) break;
     }
     return cells;
-  }, [pickedYear, pickedMonth, pickedDateIso, todayIso]);
+  }, [viewYear, viewMonth, pickedSet, todayIso]);
 
   const decMonth = () => {
-    const m = pickedMonth === 1 ? 12 : pickedMonth - 1;
-    const y = pickedMonth === 1 ? pickedYear - 1 : pickedYear;
-    const d = Math.min(pickedDay, ghanaDaysInMonth(y, m));
-    onPickedDateChange(isoFromGhanaParts(y, m, d));
+    const m = viewMonth === 1 ? 12 : viewMonth - 1;
+    const y = viewMonth === 1 ? viewYear - 1 : viewYear;
+    const sample = isoFromGhanaParts(y, m, 1);
+    onPickedDatesChange(
+      pickedDateIsos.length ? [...pickedDateIsos, sample] : [sample],
+    );
   };
   const incMonth = () => {
-    const m = pickedMonth === 12 ? 1 : pickedMonth + 1;
-    const y = pickedMonth === 12 ? pickedYear + 1 : pickedYear;
-    const d = Math.min(pickedDay, ghanaDaysInMonth(y, m));
-    onPickedDateChange(isoFromGhanaParts(y, m, d));
+    const m = viewMonth === 12 ? 1 : viewMonth + 1;
+    const y = viewMonth === 12 ? viewYear + 1 : viewYear;
+    const sample = isoFromGhanaParts(y, m, 1);
+    onPickedDatesChange(
+      pickedDateIsos.length ? [...pickedDateIsos, sample] : [sample],
+    );
   };
 
   const cameraCount = 6;
+
+  const toggleDate = (iso: string) => {
+    const next = new Set(pickedDateIsos);
+    if (next.has(iso)) next.delete(iso);
+    else next.add(iso);
+    onPickedDatesChange([...next].sort((a, b) => ghanaDayKey(a) - ghanaDayKey(b)));
+  };
+
+  const clearPicked = () => onPickedDatesChange([]);
+
+  const selectedCount = pickedDateIsos.length;
 
   return (
     <div className={`w-full flex ${flexDir} ${gap}`} role={role} aria-label="Display control buttons">
@@ -209,7 +235,7 @@ export default function ButtonPanel({
           <VintageButton
             direction={direction}
             label="Live Feed"
-            ariaLabel="Show location feed"
+            ariaLabel="Show live location feed (clear archive)"
             active={activeView === 'feed'}
             variant="primary"
             onClick={() => onViewChange('feed')}
@@ -355,18 +381,51 @@ export default function ButtonPanel({
           <div className="w-full h-px bg-[#c6cddb]/70 my-1" />
           <div className="space-y-1.5">
             <div className="px-2 flex items-center justify-between gap-2">
-              <p
-                className="
-                  text-[10px]
-                  font-semibold
-                  uppercase
-                  tracking-[0.14em]
-                  text-[#475569]
-                "
-              >
-                Archive Date
-              </p>
-              <span className="text-[10px] font-mono text-[#64748b]">GMT</span>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <p
+                  className="
+                    text-[10px]
+                    font-semibold
+                    uppercase
+                    tracking-[0.14em]
+                    text-[#475569]
+                  "
+                >
+                  Archive Dates
+                </p>
+                {selectedCount > 0 ? (
+                  <p className="text-[10px] font-mono text-[#0b3d91] font-semibold">
+                    {selectedCount} day{selectedCount === 1 ? '' : 's'} · carousel
+                  </p>
+                ) : (
+                  <p className="text-[10px] font-mono text-[#64748b]">GMT · pick one or more</p>
+                )}
+              </div>
+              {selectedCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={clearPicked}
+                  className="
+                    inline-flex
+                    items-center
+                    h-6
+                    px-2
+                    rounded-md
+                    border
+                    border-rose-200
+                    bg-rose-50
+                    text-rose-700
+                    text-[10px]
+                    font-semibold
+                    hover:bg-rose-100
+                    active:translate-y-[1px]
+                    transition-all
+                    duration-[100ms]
+                  "
+                >
+                  Clear
+                </button>
+              ) : null}
             </div>
             <div className="px-0.5 space-y-1">
               <div className="flex items-center justify-between gap-1 px-1">
@@ -390,7 +449,7 @@ export default function ButtonPanel({
                   </svg>
                 </button>
                 <p className="text-[11px] font-semibold text-[#0f172a] text-center flex-1 truncate">
-                  {ghanaMonthHeader(pickedYear, pickedMonth)}
+                  {ghanaMonthHeader(viewYear, viewMonth)}
                 </p>
                 <button
                   type="button"
@@ -421,9 +480,10 @@ export default function ButtonPanel({
               <div className="grid grid-cols-7 gap-[2px] px-0.5">
                 {gridCells.map((c, i) => {
                   const dim = !c.inMonth;
+                  const selected = c.isPicked;
                   const btnCls = [
                     'relative h-6 w-full rounded text-[10px] font-medium border transition-all duration-[100ms]',
-                    c.isPicked
+                    selected
                       ? 'bg-[#0b3d91] text-white border-[#092f70] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_1px_2px_rgba(15,23,42,0.2)]'
                       : c.isToday
                         ? 'bg-[#dbeafe] text-[#092f70] border-[#93c5fd] font-semibold hover:bg-[#bfdbfe] active:translate-y-[1px]'
@@ -435,14 +495,19 @@ export default function ButtonPanel({
                     <button
                       key={`${c.iso}-${i}`}
                       type="button"
-                      onClick={() => {
-                        onPickedDateChange(c.iso);
-                      }}
+                      onClick={() => toggleDate(c.iso)}
                       className={btnCls}
-                      aria-label={`Select ${c.iso}`}
-                      aria-pressed={c.isPicked}
+                      aria-label={`${selected ? 'Deselect' : 'Select'} ${c.iso}`}
+                      aria-pressed={selected}
                     >
-                      {c.day}
+                      {selected ? (
+                        <span className="relative flex items-center justify-center w-full h-full">
+                          <span className="absolute text-white/60 text-[7px] font-bold">✓</span>
+                          <span className="relative text-white">{c.day}</span>
+                        </span>
+                      ) : (
+                        c.day
+                      )}
                     </button>
                   );
                 })}
@@ -451,16 +516,28 @@ export default function ButtonPanel({
               <button
                 type="button"
                 onClick={() => {
-                  onPickedDateChange(todayIso);
+                  if (pickedSet.has(todayIso) && selectedCount === 1) {
+                    clearPicked();
+                  } else {
+                    onPickedDatesChange([todayIso]);
+                  }
                 }}
-                className="w-full mt-1 text-[10px] text-[#0b3d91] font-semibold hover:text-[#092f70] underline underline-offset-2"
+                className="w-full mt-1 text-[10px] text-[#0b3d91] font-semibold hover:text-[#092f70] underline underline-offset-2 text-left"
               >
                 Today · {todayIso}
               </button>
 
-              <p className="px-0.5 mt-1 text-[10px] text-[#64748b] leading-snug">
-                {ghanaFormatLong(pickedDateIso)}
-              </p>
+              {selectedCount > 0 ? (
+                <p className="px-0.5 mt-1 text-[10px] text-[#475569] leading-snug font-mono">
+                  {selectedCount === 1
+                    ? ghanaFormatLong(pickedDateIsos[0] ?? todayIso)
+                    : `${ghanaFormatLong(pickedDateIsos[0] ?? todayIso)} → ${ghanaFormatLong(pickedDateIsos[pickedDateIsos.length - 1] ?? todayIso)}`}
+                </p>
+              ) : (
+                <p className="px-0.5 mt-1 text-[10px] text-[#64748b] leading-snug">
+                  Tap dates to build a multi-day playlist.
+                </p>
+              )}
             </div>
           </div>
         </>

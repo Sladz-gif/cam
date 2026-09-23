@@ -10,24 +10,10 @@ export interface DisplayAreaProps {
   activeView: ViewType;
   selectedLocationIdx: number;
   selectedCameraIdx: number;
-  pickedDateIso: string;
-  playOpen: boolean;
-  viewerOpen: boolean;
-  viewerLocationIdx: number;
-  viewerFeedIdx: number | null;
+  pickedDateIsos: string[];
   feedSelectionVersion: number;
-  onClosePlay: () => void;
-  onConfirmPlay: () => void;
-  onCloseViewer: () => void;
-  onViewerSelectLocation: (idx: number) => void;
-  onViewerBack: () => void;
-  onViewerSelectFeed: (idx: number) => void;
-  onPickDateFromSidebar: (iso: string) => void;
 }
 
-const DateDisplay = dynamic(() => import('@/components/DateDisplay'), {
-  ssr: false,
-});
 const LocationFeed = dynamic(() => import('@/components/LocationFeed'), {
   ssr: false,
 });
@@ -38,6 +24,7 @@ function renderView(props: DisplayAreaProps): React.ReactNode {
       key={props.feedSelectionVersion}
       locationIdx={props.selectedLocationIdx}
       cameraIdx={props.selectedCameraIdx}
+      archiveDateIsos={props.pickedDateIsos}
     />
   );
 }
@@ -175,22 +162,6 @@ export default function DisplayArea(props: DisplayAreaProps) {
           aria-hidden="true"
         />
       </div>
-
-      <DateDisplay
-        pickedDateIso={props.pickedDateIso}
-        onPickDateChange={props.onPickDateFromSidebar}
-        playOpen={props.playOpen}
-        viewerOpen={props.viewerOpen}
-        viewerLocationIdx={props.viewerLocationIdx}
-        viewerFeedIdx={props.viewerFeedIdx}
-        onClosePlay={props.onClosePlay}
-        onConfirmPlay={props.onConfirmPlay}
-        onCloseViewer={props.onCloseViewer}
-        onViewerSelectLocation={props.onViewerSelectLocation}
-        onViewerBack={props.onViewerBack}
-        onViewerSelectFeed={props.onViewerSelectFeed}
-        hideMainPanel={true}
-      />
     </div>
   );
 }

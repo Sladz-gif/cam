@@ -42,11 +42,7 @@ export default function RetroDisplayApp() {
   const [activeView, setActiveView] = useState<ViewType>('feed');
   const [selectedLocationIdx, setSelectedLocationIdx] = useState(0);
   const [selectedCameraIdx, setSelectedCameraIdx] = useState(0);
-  const [pickedDateIso, setPickedDateIso] = useState<string>(() => ghanaTodayIso());
-  const [playOpen, setPlayOpen] = useState(false);
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerLocationIdx, setViewerLocationIdx] = useState(0);
-  const [viewerFeedIdx, setViewerFeedIdx] = useState<number | null>(null);
+  const [pickedDateIsos, setPickedDateIsos] = useState<string[]>([]);
   const [feedSelectionVersion, setFeedSelectionVersion] = useState(0);
 
   useEffect(() => {
@@ -60,55 +56,11 @@ export default function RetroDisplayApp() {
   }, []);
 
   const handleViewChange = useCallback((view: ViewType) => {
-    setActiveView(view);
-  }, []);
-
-  const handleClosePlay = useCallback(() => {
-    setPlayOpen(false);
-  }, []);
-
-  const handleConfirmPlay = useCallback(() => {
-    setPlayOpen(false);
-    setViewerOpen(true);
-    setViewerLocationIdx(selectedLocationIdx);
-    setViewerFeedIdx(null);
-    void logActivity({
-      event_type: 'play_confirm',
-      location_idx: selectedLocationIdx,
-      camera_idx: null,
-      picked_date_iso: pickedDateIso,
-    });
-  }, [selectedLocationIdx, pickedDateIso]);
-
-  const handleViewerSelectLocation = useCallback((idx: number) => {
-    setViewerLocationIdx(idx);
-    setViewerFeedIdx(-1);
-    void logActivity({
-      event_type: 'viewer_open',
-      location_idx: idx,
-      camera_idx: null,
-    });
-  }, []);
-
-  const handleCloseViewer = useCallback(() => {
-    setViewerOpen(false);
-    setViewerFeedIdx(null);
-    void logActivity({ event_type: 'viewer_close' });
-  }, []);
-
-  const handleViewerBack = useCallback(() => {
-    if (viewerFeedIdx !== null && viewerFeedIdx !== -1) {
-      setViewerFeedIdx(-1);
-    } else if (viewerFeedIdx === -1) {
-      setViewerFeedIdx(null);
-    } else {
-      handleCloseViewer();
+    if (view === 'feed') {
+      setPickedDateIsos([]);
+      setFeedSelectionVersion((v) => v + 1);
     }
-  }, [viewerFeedIdx, handleCloseViewer]);
-
-  const handleViewerSelectFeed = useCallback((idx: number) => {
-    setViewerFeedIdx(idx);
-    void logActivity({ event_type: 'viewer_open', camera_idx: idx });
+    setActiveView(view);
   }, []);
 
   const handleLocationChange = useCallback((idx: number) => {
@@ -134,51 +86,38 @@ export default function RetroDisplayApp() {
     });
   }, [selectedLocationIdx]);
 
-  const handlePickDateChange = useCallback((iso: string) => {
-    setPickedDateIso(iso);
-    setPlayOpen(true);
-    void logActivity({
-      event_type: 'date_pick',
-      picked_date_iso: iso,
-    });
+  const handlePickDatesChange = useCallback((isos: string[]) => {
+    const sorted = [...isos].sort();
+    setPickedDateIsos(sorted);
+    setFeedSelectionVersion((v) => v + 1);
+    setActiveView('feed');
+    if (sorted.length > 0) {
+      const last = sorted[sorted.length - 1];
+      void logActivity({
+        event_type: 'date_pick',
+        picked_date_iso: last,
+        detail: { picked_dates: sorted },
+      });
+    }
   }, []);
 
   const displayProps = useMemo(
     () => ({
       selectedLocationIdx,
       selectedCameraIdx,
-      pickedDateIso,
-      playOpen,
-      viewerOpen,
-      viewerLocationIdx,
-      viewerFeedIdx,
+      pickedDateIsos,
       feedSelectionVersion,
-      onClosePlay: handleClosePlay,
-      onConfirmPlay: handleConfirmPlay,
-      onCloseViewer: handleCloseViewer,
-      onViewerSelectLocation: handleViewerSelectLocation,
-      onViewerBack: handleViewerBack,
-      onViewerSelectFeed: handleViewerSelectFeed,
-      onPickDateFromSidebar: handlePickDateChange,
     }),
     [
       selectedLocationIdx,
       selectedCameraIdx,
-      pickedDateIso,
-      playOpen,
-      viewerOpen,
-      viewerLocationIdx,
-      viewerFeedIdx,
+      pickedDateIsos,
       feedSelectionVersion,
-      handleClosePlay,
-      handleConfirmPlay,
-      handleCloseViewer,
-      handleViewerSelectLocation,
-      handleViewerBack,
-      handleViewerSelectFeed,
-      handlePickDateChange,
     ],
   );
+
+  const todayIso = useMemo(() => ghanaTodayIso(), []);
+  const isArchiveMode = pickedDateIsos.length > 0;
 
   return (
     <div
@@ -321,8 +260,8 @@ export default function RetroDisplayApp() {
               onLocationChange={handleLocationChange}
               selectedCameraIdx={selectedCameraIdx}
               onCameraChange={handleCameraChange}
-              pickedDateIso={pickedDateIso}
-              onPickedDateChange={handlePickDateChange}
+              pickedDateIsos={pickedDateIsos}
+              onPickedDatesChange={handlePickDatesChange}
             />
           </div>
 
@@ -396,10 +335,10 @@ export default function RetroDisplayApp() {
                 aria-hidden="true"
                 className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-600"
               />
-              Services Online
+              {isArchiveMode ? 'Archive mode' : 'Live channel'}
             </p>
             <p className="text-[#64748b] font-mono text-[10px]">
-              v1.0.0 · Secure Channel
+              v1.0.0 · {todayIso}
             </p>
           </div>
         </aside>
@@ -432,6 +371,11 @@ export default function RetroDisplayApp() {
                 <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#eef2f7] border border-[#cbd2df] text-[10px] font-mono text-[#475569]">
                   {LOCATIONS[selectedLocationIdx]} · CAM-{String(selectedCameraIdx + 1).padStart(2, '0')}
                 </span>
+                {isArchiveMode ? (
+                  <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#0b3d91]/10 border border-[#0b3d91]/30 text-[10px] font-mono text-[#0b3d91] font-semibold">
+                    ARCHIVE · {pickedDateIsos.length}d
+                  </span>
+                ) : null}
               </div>
             </div>
             <div className="flex items-center gap-2.5 text-[10px] sm:text-[11px] text-[#475569]">
@@ -478,25 +422,29 @@ export default function RetroDisplayApp() {
                 Logs
               </Link>
               <div
-                className="
+                className={`
                   flex
                   items-center
                   gap-1.5
                   px-2
                   py-0.5
                   rounded
-                  bg-emerald-50
                   border
-                  border-emerald-200
-                  text-emerald-700
                   font-medium
-                "
+                  ${
+                    isArchiveMode
+                      ? 'bg-[#0b3d91]/10 border-[#0b3d91]/30 text-[#0b3d91]'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  }
+                `}
               >
                 <span
                   aria-hidden="true"
-                  className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"
+                  className={`inline-block w-1.5 h-1.5 rounded-full ${
+                    isArchiveMode ? 'bg-[#0b3d91]' : 'bg-emerald-600 animate-pulse'
+                  }`}
                 />
-                Live
+                {isArchiveMode ? 'Archive' : 'Live'}
               </div>
             </div>
           </div>

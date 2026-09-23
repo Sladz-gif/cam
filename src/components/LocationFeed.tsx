@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LocationType } from './DisplayArea';
 
 const LOCATIONS: LocationType[] = [
@@ -37,7 +38,7 @@ const FEED: Record<LocationType, FeedImage[]> = {
     {
       url: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=1200&q=80',
       caption: 'Plantation block B4 — new growth',
-      meta: '09:33 · CAM-07 · 62% hum · Galamsey: None',
+      meta: '09:33 · CAM-03 · 62% hum · Galamsey: None',
     },
     {
       url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1200&q=80',
@@ -218,6 +219,21 @@ function LiveDot() {
   );
 }
 
+function ArchiveDot() {
+  return (
+    <span
+      aria-hidden="true"
+      className="
+        inline-block
+        w-1.5
+        h-1.5
+        rounded-sm
+        bg-[#0b3d91]
+      "
+    />
+  );
+}
+
 function PinIcon() {
   return (
     <svg
@@ -236,14 +252,50 @@ function PinIcon() {
   );
 }
 
+function hashStr(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+
+function ghanaFormatShort(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (Number.isNaN(y) || Number.isNaN(m) || Number.isNaN(d)) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d, 12));
+  try {
+    return new Intl.DateTimeFormat('en-GH', {
+      timeZone: 'Africa/Accra',
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(dt);
+  } catch {
+    return iso;
+  }
+}
+
+const CAROUSEL_INTERVAL_MS = 220;
+
+interface ArchiveFrame {
+  dateIso: string;
+  image: FeedImage;
+  cameraIdx: number;
+}
+
 export interface LocationFeedProps {
   locationIdx: number;
   cameraIdx: number;
+  archiveDateIsos?: string[];
 }
 
 export default function LocationFeed({
   locationIdx,
   cameraIdx,
+  archiveDateIsos = [],
 }: LocationFeedProps) {
   const location = LOCATIONS[locationIdx] ?? LOCATIONS[0];
   const images = FEED[location];
@@ -251,6 +303,67 @@ export default function LocationFeed({
     Math.max(0, cameraIdx),
     images.length - 1,
   );
+  const isArchive = archiveDateIsos.length > 0;
+
+  const frames: ArchiveFrame[] = useMemo<ArchiveFrame[]>(() => {
+    if (!isArchive) return [];
+    const sortedDates = [...archiveDateIsos].sort();
+    const camCount = images.length;
+    const out: ArchiveFrame[] = [];
+    for (const dateIso of sortedDates) {
+      const seed = hashStr(dateIso + ':' + location);
+      for (let offset = 0; offset < camCount; offset++) {
+        const camIdx = (seed + offset) % camCount;
+        out.push({
+          dateIso,
+          image: images[camIdx],
+          cameraIdx: camIdx,
+        });
+      }
+    }
+    if (out.length === 0) return out;
+    const firstIdx = out.findIndex(
+      (f) => f.cameraIdx === selectedFeed,
+    );
+    if (firstIdx > 0) {
+      const start = out.slice(firstIdx);
+      const tail = out.slice(0, firstIdx);
+      return [...start, ...tail];
+    }
+    return out;
+  }, [archiveDateIsos, images, isArchive, location, selectedFeed]);
+
+  const [frameIdx, setFrameIdx] = useState(0);
+  const runningRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setFrameIdx(0);
+    if (frames.length <= 1) return;
+    runningRef.current = window.setInterval(() => {
+      setFrameIdx((i) => (i + 1) % frames.length);
+    }, CAROUSEL_INTERVAL_MS);
+    return () => {
+      if (runningRef.current !== null) {
+        window.clearInterval(runningRef.current);
+        runningRef.current = null;
+      }
+    };
+  }, [frames]);
+
+  const sortedDates = useMemo(
+    () => [...archiveDateIsos].sort(),
+    [archiveDateIsos],
+  );
+
+  const liveImage = images[selectedFeed];
+  const archiveFrame = frames[frameIdx];
+
+  const currentImage: FeedImage = isArchive
+    ? archiveFrame?.image ?? liveImage
+    : liveImage;
+  const currentCameraIdx = isArchive
+    ? archiveFrame?.cameraIdx ?? selectedFeed
+    : selectedFeed;
 
   return (
     <div
@@ -286,7 +399,7 @@ export default function LocationFeed({
                 text-[#475569]
               "
             >
-              Live Feed
+              {isArchive ? 'Archive Playback' : 'Live Feed'}
             </p>
             <div
               className="
@@ -308,10 +421,31 @@ export default function LocationFeed({
               <PinIcon />
               {location} Station
             </div>
+            {isArchive ? (
+              <div
+                className="
+                  flex
+                  items-center
+                  gap-1.5
+                  px-2
+                  py-0.5
+                  rounded
+                  border
+                  border-[#0b3d91]/30
+                  bg-white
+                  text-[#0b3d91]
+                  text-[11px]
+                  font-semibold
+                  font-mono
+                "
+              >
+                {sortedDates.length} day{sortedDates.length === 1 ? '' : 's'}
+              </div>
+            ) : null}
           </div>
 
           <div
-            className="
+            className={`
               flex
               items-center
               gap-1.5
@@ -321,12 +455,15 @@ export default function LocationFeed({
               text-[10px]
               sm:text-[11px]
               font-medium
-              bg-[#0b3d91]
-              text-white
-            "
+              ${
+                isArchive
+                  ? 'bg-[#0b3d91]/10 text-[#0b3d91] border border-[#0b3d91]/30'
+                  : 'bg-[#0b3d91] text-white'
+              }
+            `}
           >
-            <LiveDot />
-            LIVE
+            {isArchive ? <ArchiveDot /> : <LiveDot />}
+            {isArchive ? 'ARCHIVE' : 'LIVE'}
           </div>
         </div>
 
@@ -353,14 +490,17 @@ export default function LocationFeed({
                 "
               >
                 <Image
-                  src={images[selectedFeed].url}
-                  alt={images[selectedFeed].caption}
+                  key={isArchive ? `arc-${frameIdx}` : `live-${location}-${selectedFeed}`}
+                  src={currentImage.url}
+                  alt={currentImage.caption}
                   fill
                   sizes="100vw"
                   className="
                     w-full
                     h-full
                     object-cover
+                    transition-opacity
+                    duration-[160ms]
                   "
                   priority
                 />
@@ -408,10 +548,43 @@ export default function LocationFeed({
                     backdrop-blur-[2px]
                   "
                 >
-                  <LiveDot />
-                  {location.slice(0, 3).toUpperCase()}-
-                  {(selectedFeed + 1).toString().padStart(2, '0')}
+                  {isArchive ? (
+                    <>
+                      <ArchiveDot />
+                      {location.slice(0, 3).toUpperCase()}-
+                      {(currentCameraIdx + 1).toString().padStart(2, '0')}
+                      {'  '}·  {archiveFrame ? ghanaFormatShort(archiveFrame.dateIso) : ''}
+                    </>
+                  ) : (
+                    <>
+                      <LiveDot />
+                      {location.slice(0, 3).toUpperCase()}-
+                      {(currentCameraIdx + 1).toString().padStart(2, '0')}
+                    </>
+                  )}
                 </div>
+                {isArchive && frames.length > 1 ? (
+                  <div
+                    className="
+                      absolute
+                      top-2.5
+                      sm:top-3
+                      right-2.5
+                      sm:right-3
+                      px-2
+                      py-1
+                      rounded
+                      bg-[#0b3d91]/90
+                      text-white
+                      text-[11px]
+                      font-mono
+                      font-semibold
+                      backdrop-blur-[2px]
+                    "
+                  >
+                    {frameIdx + 1}/{frames.length}
+                  </div>
+                ) : null}
                 <div
                   className="
                     absolute
@@ -432,12 +605,38 @@ export default function LocationFeed({
                       drop-shadow-[0_1px_2px_rgba(15,23,42,0.8)]
                     "
                   >
-                    {images[selectedFeed].caption}
+                    {currentImage.caption}
                   </p>
                   <p className="mt-1 text-[11px] sm:text-[12px] font-mono text-white/85">
-                    {images[selectedFeed].meta}
+                    {isArchive
+                      ? `${archiveFrame ? ghanaFormatShort(archiveFrame.dateIso) : ''}  ·  ${currentImage.meta}`
+                      : currentImage.meta}
                   </p>
                 </div>
+                {isArchive && frames.length > 1 ? (
+                  <div
+                    className="
+                      absolute
+                      inset-x-3
+                      sm:inset-x-4
+                      bottom-[calc(theme(spacing.3)+48px)]
+                      sm:bottom-[calc(theme(spacing.4)+56px)]
+                      h-[3px]
+                      rounded-full
+                      bg-white/15
+                      overflow-hidden
+                    "
+                    aria-hidden="true"
+                  >
+                    <div
+                      className="h-full bg-white/80 rounded-full"
+                      style={{
+                        width: `${((frameIdx + 1) / frames.length) * 100}%`,
+                        transition: 'width 160ms linear',
+                      }}
+                    />
+                  </div>
+                ) : null}
               </div>
               <div
                 className="
@@ -468,26 +667,56 @@ export default function LocationFeed({
                     justify-center
                   "
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="w-[16px] h-[16px] text-[#0b3d91]"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="9" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
-                  </svg>
+                  {isArchive ? (
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="w-[16px] h-[16px] text-[#0b3d91]"
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m16 10 5-2.5v9L16 14" />
+                    </svg>
+                  ) : (
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="w-[16px] h-[16px] text-[#0b3d91]"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
+                    </svg>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-[#0f172a] text-[12px] sm:text-[13px]">
-                    Camera Feed · {location.slice(0, 3).toUpperCase()}-
-                    {(selectedFeed + 1).toString().padStart(2, '0')}
+                    {isArchive ? (
+                      <>
+                        Archive Playlist · {location.slice(0, 3).toUpperCase()}-
+                        {String(cameraIdx + 1).padStart(2, '0')}
+                      </>
+                    ) : (
+                      <>
+                        Camera Feed · {location.slice(0, 3).toUpperCase()}-
+                        {String(selectedFeed + 1).padStart(2, '0')}
+                      </>
+                    )}
                   </p>
                   <p className="mt-0.5 text-[11px] sm:text-[12px] text-[#475569] leading-relaxed">
-                    Live view from the selected camera. Use the sidebar to change
-                    station or switch cameras.
+                    {isArchive
+                      ? sortedDates.length > 0
+                        ? `Fast carousel through archive captures ${ghanaFormatShort(sortedDates[0])}${
+                            sortedDates.length > 1
+                              ? ' → ' + ghanaFormatShort(sortedDates[sortedDates.length - 1])
+                              : ''
+                          } — multiple frames per day emulate video playback.`
+                        : 'Archive playlist is loading.'
+                      : 'Live view from the selected camera. Use the sidebar to change station or switch cameras. Click Live Feed to return from archive mode.'}
                   </p>
                 </div>
               </div>
